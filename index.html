@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Store - Catálogo Oficial</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Unbounded:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #00ffae; --bg: #0b0b0b; --card: rgba(30, 30, 30, 0.7); }
+        body { margin: 0; font-family: 'Outfit', sans-serif; background: var(--bg); color: white; line-height: 1.6; }
+        
+        header { text-align: center; padding: 40px 20px 0px; background: linear-gradient(to bottom, #000, transparent); }
+        header img { width: 110px; margin-bottom: 12px; filter: drop-shadow(0 0 15px rgba(0,255,174,0.3)); }
+        header h1 { margin: 0; font-family: 'Unbounded', sans-serif; font-size: 1rem; letter-spacing: 8px; font-weight: 700; color: var(--primary); text-shadow: 0 0 20px rgba(0,255,174,0.4); text-transform: uppercase; opacity: 0.9; }
+        header p { color: #555; font-size: 0.75rem; margin-top: 10px; letter-spacing: 3px; text-transform: uppercase; font-weight: 300; }
+
+        .search-container { max-width: 400px; margin: 20px auto 0; position: relative; padding: 0 20px; }
+        #search-input { width: 100%; padding: 12px 20px 12px 45px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; color: white; font-family: inherit; font-size: 13px; transition: 0.3s; box-sizing: border-box; }
+        #search-input:focus { outline: none; border-color: var(--primary); background: rgba(255,255,255,0.12); }
+        .search-icon { position: absolute; left: 35px; top: 50%; transform: translateY(-50%); color: #aaa; font-size: 16px; pointer-events: none; }
+
+        .productos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; padding: 0 20px 60px; max-width: 1300px; margin: 0 auto; }
+        
+        .card { background: var(--card); border-radius: 24px; overflow: hidden; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); position: relative; transition: transform 0.4s ease, border-color 0.4s ease; display: flex; flex-direction: column; }
+        .card:hover { transform: translateY(-10px); border-color: var(--primary); box-shadow: 0 20px 40px rgba(0,255,174,0.1); }
+        
+        .image-container { position: relative; width: 100%; height: 320px; overflow: hidden; cursor: pointer; }
+        .main-img { width: 100%; height: 100%; object-fit: cover; transition: 0.5s; }
+        .card:hover .main-img { scale: 1.05; }
+        
+        .thumbnails { display: flex; gap: 8px; padding: 12px; background: rgba(0,0,0,0.5); overflow-x: auto; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; cursor: pointer; opacity: 0.4; border: 2px solid transparent; transition: 0.3s; }
+        .thumb.active { opacity: 1; border-color: var(--primary); }
+        
+        .info { padding: 25px; text-align: center; flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .info h3 { margin: 0; font-size: 1.2rem; font-weight: 600; }
+        .precio { color: var(--primary); font-size: 1.8rem; font-weight: 700; margin: 15px 0; }
+        
+        .badge-agotado { position: absolute; top: 20px; left: 20px; background: #ff4444; color: white; padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 11px; z-index: 10; letter-spacing: 1px; box-shadow: 0 5px 15px rgba(255,68,68,0.3); }
+        
+        button { width: 100%; padding: 16px; border: none; background: var(--primary); color: #000; font-weight: 700; font-size: 0.9rem; border-radius: 14px; cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
+        button:hover:not(:disabled) { background: #fff; transform: scale(1.02); }
+        button:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+        #loader { text-align: center; padding: 100px 20px; font-size: 1.2rem; color: #555; }
+        .spinner { width: 40px; height: 40px; border: 3px solid rgba(0,255,174,0.1); border-top: 3px solid var(--primary); border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Modal Zoom */
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+        #modal img { max-width: 90%; max-height: 90%; border-radius: 12px; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+    <div id="modal" onclick="this.style.display='none'"><img id="modal-img"></div>
+    
+    <header>
+        <img src="logo.png" alt="Virtual Store" onerror="this.style.display='none'">
+        <h1>VIRTUAL STORE</h1>
+        
+        <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="search-input" placeholder="Buscar por nombre o categoría..." onkeyup="filtrarProductos()">
+        </div>
+    </header>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        Actualizando catálogo...
+    </div>
+
+    <section id="lista" class="productos"></section>
+
+<script>
+    // URL DE TU GOOGLE APPS SCRIPT
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzgIQ63nrbptAKmTXmyfvF1LCemVKVIq4Rrw3K3RWNXIua5tnEu1EtDkCm9ysj4ok4/exec"; 
+
+    let todosLosProductos = [];
+
+    async function cargarTienda() {
+        try {
+            const res = await fetch(GAS_URL, { redirect: "follow" });
+            const data = await res.json();
+            
+            if (!data.productos || data.productos.length === 0) {
+                document.getElementById("loader").innerHTML = "No hay productos disponibles actualmente.";
+                return;
+            }
+
+            todosLosProductos = data.productos.reverse();
+            mostrarProductos(todosLosProductos);
+            document.getElementById("loader").style.display = "none";
+        } catch (e) {
+            console.error(e);
+            document.getElementById("loader").innerHTML = "Error al conectar con la tienda.";
+        }
+    }
+
+    function mostrarProductos(listaParaMostrar) {
+        const lista = document.getElementById("lista");
+        lista.innerHTML = "";
+
+        if (listaParaMostrar.length === 0) {
+            lista.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #555; padding: 100px 20px;">No se encontraron productos que coincidan con tu búsqueda.</div>';
+            return;
+        }
+
+        listaParaMostrar.forEach((p, idx) => {
+            const isAgotado = p.Stock === "Agotado";
+            const fotos = p.ImagenURL ? p.ImagenURL.split(",") : ["https://via.placeholder.com/300"];
+            const cardId = `p-${idx}`;
+
+            let cardHtml = `
+                <div class="card" id="${cardId}" style="${isAgotado ? 'filter: grayscale(0.7);' : ''}">
+                    ${isAgotado ? '<div class="badge-agotado">SIN STOCK</div>' : ''}
+                    
+                    <div class="image-container" onclick="abrirZoom('${fotos[0]}')">
+                        <img src="${fotos[0]}" class="main-img" id="main-${cardId}">
+                    </div>
+
+                    ${fotos.length > 1 ? `
+                        <div class="thumbnails">
+                            ${fotos.map((f, i) => `
+                                <img src="${f}" class="thumb ${i === 0 ? 'active' : ''}" 
+                                     onclick="cambiarImagen('${cardId}', '${f}', this)">
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
+                    <div class="info">
+                        <div>
+                            <h3>${p.Nombre}</h3>
+                            <p style="font-size:0.8rem; color:#888; margin-top:5px;">Categoría: ${p.Categoria || 'General'}</p>
+                        </div>
+                        <div>
+                            <div class="precio">$${p.Precio}</div>
+                            <button ${isAgotado ? 'disabled' : ''} onclick="pedirProducto('${p.Nombre}', '${p.Precio}')">
+                                ${isAgotado ? 'Producto Agotado' : 'Pedir por WhatsApp'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lista.innerHTML += cardHtml;
+        });
+    }
+
+    function filtrarProductos() {
+        const term = document.getElementById("search-input").value.toLowerCase().trim();
+        const filtrados = todosLosProductos.filter(p => 
+            (p.Nombre && p.Nombre.toLowerCase().includes(term)) || 
+            (p.Categoria && p.Categoria.toLowerCase().includes(term))
+        );
+        mostrarProductos(filtrados);
+    }
+
+    function cambiarImagen(cardId, url, el) {
+        document.getElementById(`main-${cardId}`).src = url;
+        const thumbs = document.querySelectorAll(`#${cardId} .thumb`);
+        thumbs.forEach(t => t.classList.remove('active'));
+        el.classList.add('active');
+        // Actualizar zoom para la nueva imagen
+        el.closest('.card').querySelector('.image-container').onclick = () => abrirZoom(url);
+    }
+
+    function abrirZoom(url) {
+        document.getElementById('modal-img').src = url;
+        document.getElementById('modal').style.display = 'flex';
+    }
+
+    function pedirProducto(nombre, precio) {
+        const telefono = "5493624744142";
+        const msg = encodeURIComponent(`¡Hola! Me interesa este producto:\n\n*${nombre}*\nPrecio: *$${precio}*\n\n¿Tienen stock disponible?`);
+        window.open(`https://wa.me/${telefono}?text=${msg}`, '_blank');
+    }
+
+    cargarTienda();
+</script>
+</body>
+</html>

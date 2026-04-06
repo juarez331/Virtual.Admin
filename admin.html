@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Virtual Store</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #00ffae; --bg: #0b0b0b; --card: #1a1a1a; }
+        body { margin: 0; font-family: 'Poppins', sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { background: var(--card); padding: 30px; border-radius: 20px; width: 100%; max-width: 500px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        h1 { font-size: 22px; text-align: center; color: var(--primary); margin-bottom: 25px; }
+        label { display: block; margin-top: 15px; font-size: 12px; color: #888; text-transform: uppercase; }
+        input, select, textarea { width: 100%; padding: 12px; margin-top: 5px; background: #000; border: 1px solid #333; border-radius: 10px; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 16px; margin-top: 25px; background: var(--primary); color: #000; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; transition: 0.3s; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,255,174,0.3); }
+
+        .config-box { margin-bottom: 20px; padding: 15px; border: 1px dashed #444; border-radius: 12px; display: none; }
+        
+        .product-list { width: 100%; max-width: 500px; margin-top: 50px; }
+        .product-item { background: #111; padding: 15px; border-radius: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 15px; border-left: 5px solid var(--primary); transition: 0.3s; }
+        .product-item.is-agotado { border-left-color: #ff4444; opacity: 0.7; }
+        .product-item img { width: 60px; height: 60px; object-fit: cover; border-radius: 10px; }
+        .product-info { flex-grow: 1; }
+        .product-info h4 { margin: 0; font-size: 15px; }
+        .product-info span { font-size: 11px; color: #666; }
+        
+        .actions { display: flex; gap: 10px; }
+        .btn-action { padding: 8px 12px; font-size: 11px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+        .btn-stock { background: #333; color: white; }
+        .btn-delete { background: #ff4444; color: white; }
+
+        .loader { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:none; justify-content:center; align-items:center; z-index:1000; flex-direction:column; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Estilos Galería Edición */
+        .galeria-edicion { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; background: #000; padding: 10px; border-radius: 12px; }
+        .thumb-edit { width: 70px; height: 70px; position: relative; border-radius: 8px; overflow: hidden; }
+        .thumb-edit img { width: 100%; height: 100%; object-fit: cover; }
+        .thumb-edit .btn-remove { position: absolute; top: 0; right: 0; background: rgba(255,68,68,0.8); color: white; border: none; padding: 2px 6px; font-size: 10px; cursor: pointer; border-bottom-left-radius: 8px; }
+    </style>
+</head>
+<body>
+
+<div id="loader" class="loader">
+    <div style="border: 4px solid var(--primary); border-top-color: transparent; width: 40px; height: 40px; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <p>Subiendo Producto... ⏳</p>
+</div>
+
+<div class="container">
+    <h1>PANEL DE GESTIÓN</h1>
+    
+    <button onclick="toggleConfig()" style="background:#222; color:#888; font-size:12px; padding:10px; margin-top:0; margin-bottom:15px;">Configurar Conexión ⚙️</button>
+    <div id="config-box" class="config-box">
+        <label>Token GitHub</label><input type="password" id="ghToken">
+        <label>URL Apps Script</label><input type="text" id="gasUrl">
+    </div>
+
+    <input type="hidden" id="edit-id">
+    <label>Nombre del Producto</label><input type="text" id="nombre">
+    <label>Precio</label><input type="text" id="precio" placeholder="15.000">
+    <label>Categoría</label>
+    <select id="categoria">
+        <option value="Auriculares">🎧 Auriculares</option>
+        <option value="Accesorios">💻 Accesorios</option>
+        <option value="Memorias">💾 Memorias</option>
+        <option value="Parlantes">🔊 Parlantes</option>
+    </select>
+    <label>Fotos (Máx 5) <small style="color:#555">(Solo si quieres añadir nuevas)</small></label>
+    <input type="file" id="foto" multiple accept="image/*">
+    
+    <div id="galeria-edicion" class="galeria-edicion" style="display:none;">
+        <!-- Se llena solo al editar -->
+    </div>
+
+    <div id="edit-indicator" style="display:none; background:rgba(0,255,174,0.1); padding:10px; border-radius:8px; margin-top:10px; font-size:12px; color:var(--primary); text-align:center;">
+        Editando producto... <span onclick="cancelarEdicion()" style="text-decoration:underline; cursor:pointer; margin-left:10px;">Cancelar</span>
+    </div>
+
+    <button id="btn-publicar" onclick="subirProducto()">PUBLICAR PRODUCTO</button>
+</div>
+
+<div class="product-list">
+    <h3>CATÁLOGO ACTUAL</h3>
+    <div id="lista">Cargando lista...</div>
+</div>
+
+<script>
+    const GH_USER = "juarez331";
+    const GH_REPO = "Virtual.Admin";
+
+    window.onload = () => {
+        document.getElementById('ghToken').value = localStorage.getItem('ghToken') || '';
+        document.getElementById('gasUrl').value = localStorage.getItem('gasUrl') || '';
+        cargarLista();
+    };
+
+    function toggleConfig() {
+        const box = document.getElementById('config-box');
+        if(box.style.display === "block") {
+            localStorage.setItem('ghToken', document.getElementById('ghToken').value);
+            localStorage.setItem('gasUrl', document.getElementById('gasUrl').value);
+            box.style.display = "none";
+            cargarLista();
+        } else { box.style.display = "block"; }
+    }
+
+    async function cargarLista() {
+        const url = localStorage.getItem('gasUrl');
+        if(!url) { document.getElementById("lista").innerText = "Configura la URL para ver tus productos."; return; }
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            const lista = document.getElementById("lista");
+            lista.innerHTML = "";
+            
+            // Guardamos los productos globalmente para poder editarlos
+            window.productosCache = data.productos;
+
+            data.productos.reverse().forEach(p => {
+                const agotado = p.Stock === "Agotado";
+                lista.innerHTML += `
+                    <div class="product-item ${agotado?'is-agotado':''}">
+                        <img src="${p.ImagenURL.split(',')[0]}">
+                        <div class="product-info">
+                            <h4>${p.Nombre}</h4>
+                            <span>$${p.Precio} - ${agotado?'AGOTADO':'EN STOCK'}</span>
+                        </div>
+                        <div class="actions">
+                            <button class="btn-action btn-sm" style="background:#444; color:white;" onclick="prepararEdicion('${p.ID}')">✏️</button>
+                            <button class="btn-action btn-stock" onclick="toggleStock('${p.ID}')">${agotado?'Activar':'Agotar'}</button>
+                            <button class="btn-action btn-delete" onclick="borrarProducto('${p.ID}')">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+        } catch(e) { document.getElementById("lista").innerText = "Error al conectar con Google Sheets."; }
+    }
+
+    function prepararEdicion(id) {
+        const p = window.productosCache.find(item => item.ID.toString() === id.toString());
+        if(!p) return;
+
+        document.getElementById('edit-id').value = p.ID;
+        document.getElementById('nombre').value = p.Nombre;
+        document.getElementById('precio').value = p.Precio;
+        document.getElementById('categoria').value = p.Categoria || 'General';
+        document.getElementById('btn-publicar').innerText = "GUARDAR CAMBIOS";
+        document.getElementById('edit-indicator').style.display = "block";
+        
+        // Cargamos las URLs actuales para gestionar el borrado granular
+        window.fotosEnEdicion = p.ImagenURL ? p.ImagenURL.split(',') : [];
+        renderGaleriaEdicion();
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderGaleriaEdicion() {
+        const ga = document.getElementById("galeria-edicion");
+        if(window.fotosEnEdicion.length === 0) { ga.style.display = "none"; return; }
+        
+        ga.style.display = "flex";
+        ga.innerHTML = window.fotosEnEdicion.map((url, i) => `
+            <div class="thumb-edit">
+                <img src="${url}">
+                <button class="btn-remove" onclick="quitarFoto('${url}')">X</button>
+            </div>
+        `).join('');
+    }
+
+    function quitarFoto(url) {
+        window.fotosEnEdicion = window.fotosEnEdicion.filter(item => item !== url);
+        renderGaleriaEdicion();
+    }
+
+    function cancelarEdicion() {
+        document.getElementById('edit-id').value = "";
+        document.getElementById('nombre').value = "";
+        document.getElementById('precio').value = "";
+        document.getElementById('foto').value = "";
+        document.getElementById('btn-publicar').innerText = "PUBLICAR PRODUCTO";
+        document.getElementById('edit-indicator').style.display = "none";
+        document.getElementById('galeria-edicion').style.display = "none";
+        window.fotosEnEdicion = [];
+    }
+
+    async function subirProducto() {
+        const editId = document.getElementById('edit-id').value;
+        const t = document.getElementById('ghToken').value;
+        const g = document.getElementById('gasUrl').value;
+        const n = document.getElementById('nombre').value;
+        const p = document.getElementById('precio').value;
+        const files = document.getElementById('foto').files;
+
+        // Si no estamos editando, las fotos son obligatorias. Si editamos, son opcionales.
+        if(!t || !g || !n || !p || (!editId && files.length === 0)) return alert("Completa todos los campos");
+
+        document.getElementById('loader').style.display = 'flex';
+        try {
+            let urlsString = "";
+            const files = document.getElementById('foto').files;
+            
+            // Subimos SOLO las nuevas si se seleccionaron
+            const urlsNuevas = [];
+            if(files.length > 0) {
+                for (let f of Array.from(files).slice(0, 5)) {
+                    const b = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(f); });
+                    const path = `fotos/img_${Date.now()}_${Math.random().toString(36).substr(2,3)}.png`;
+                    await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${path}`, {
+                        method: 'PUT', headers: { 'Authorization': `Bearer ${t}` },
+                        body: JSON.stringify({ message: "Foto", content: b.split(',')[1] })
+                    });
+                    urlsNuevas.push(`https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/${path}`);
+                }
+            }
+
+            // Combinamos las que ya estaban (filtradas) + las nuevas
+            const listafinal = editId ? [...window.fotosEnEdicion, ...urlsNuevas] : urlsNuevas;
+            urlsString = listafinal.slice(0, 5).join(",");
+
+            if(urlsString === "") return alert("El producto debe tener al menos 1 foto.");
+
+            const payload = { 
+                action: editId ? "updateProducto" : "addProducto", 
+                data: { Nombre: n, Categoria: document.getElementById('categoria').value, Precio: p, ImagenURL: urlsString }
+            };
+            if(editId) payload.id = editId;
+
+            await fetch(g, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload)});
+            
+            alert(editId ? "¡Producto Actualizado!" : "¡Producto Publicado!");
+            location.reload();
+        } catch(e) { alert("Error: " + e.message); }
+        finally { document.getElementById('loader').style.display = 'none'; }
+    }
+
+    async function borrarProducto(id) {
+        if(!confirm("¿Seguro que quieres borrar este producto?")) return;
+        const g = localStorage.getItem('gasUrl');
+        if(!g) return alert("Falta el link de Apps Script");
+        
+        document.getElementById('loader').style.display = 'flex';
+        try {
+            await fetch(g, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify({ action: "deleteProducto", id: id }) 
+            });
+            // Esperamos 2 segundos para que Google Sheets procese
+            setTimeout(() => {
+                alert("Producto eliminado correctamente.");
+                location.reload();
+            }, 2000);
+        } catch(e) { 
+            alert("Error al conectar: " + e.message);
+            document.getElementById('loader').style.display = 'none';
+        }
+    }
+
+    async function toggleStock(id) {
+        const g = localStorage.getItem('gasUrl');
+        if(!g) return alert("Falta el link de Apps Script");
+        
+        document.getElementById('loader').style.display = 'flex';
+        try {
+            await fetch(g, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify({ action: "toggleStock", id: id }) 
+            });
+            setTimeout(() => { location.reload(); }, 2000);
+        } catch(e) { 
+            alert("Error: " + e.message);
+            document.getElementById('loader').style.display = 'none';
+        }
+    }
+</script>
+</body>
+</html>
