@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Store - Catálogo Oficial</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Unbounded:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #00ffae; --bg: #0b0b0b; --card: rgba(30, 30, 30, 0.7); }
+        body { margin: 0; font-family: 'Outfit', sans-serif; background: var(--bg); color: white; line-height: 1.6; }
+        
+        header { text-align: center; padding: 30px 20px 0px; background: linear-gradient(to bottom, #000, transparent); }
+        header img { width: 160px; margin-bottom: 2px; filter: drop-shadow(0 0 15px rgba(0,255,174,0.3)); cursor: pointer; transition: 0.3s; }
+        header img:hover { transform: scale(1.05); filter: drop-shadow(0 0 20px var(--primary)); }
+        header p { color: #555; font-size: 0.75rem; margin-top: 10px; letter-spacing: 3px; text-transform: uppercase; font-weight: 300; }
+
+        .search-container { max-width: 400px; margin: 10px auto 10px; position: relative; padding: 0 20px; display: flex; align-items: center; }
+        #search-input { width: 100%; padding: 12px 40px 12px 45px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; color: white; font-family: inherit; font-size: 13px; transition: 0.3s; box-sizing: border-box; }
+        #search-input:focus { outline: none; border-color: var(--primary); background: rgba(255,255,255,0.12); }
+        .search-icon { position: absolute; left: 35px; color: #aaa; font-size: 16px; pointer-events: none; }
+        .clear-search { position: absolute; right: 35px; color: #888; font-size: 22px; cursor: pointer; display: none; padding: 5px; transition: 0.2s; line-height: 1; }
+        .clear-search:hover { color: var(--primary); transform: scale(1.2); }
+
+        /* Filtros de Categoría */
+        .filtros-container { display: flex; gap: 8px; padding: 0 20px 15px; overflow-x: auto; scrollbar-width: none; max-width: 440px; margin: 0 auto; }
+        .filtros-container::-webkit-scrollbar { display: none; }
+        .btn-filtro { flex-shrink: 0; width: auto !important; padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); color: #aaa; font-size: 11px; font-family: inherit; cursor: pointer; transition: 0.25s; white-space: nowrap; }
+        .btn-filtro:hover { border-color: var(--primary); color: var(--primary); background: rgba(0,255,174,0.08); transform: none; }
+        .btn-filtro.activo { background: var(--primary); color: #000; border-color: var(--primary); font-weight: 700; }
+
+        .productos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; padding: 0 20px 60px; max-width: 1300px; margin: 0 auto; }
+        
+        .card { background: var(--card); border-radius: 24px; overflow: hidden; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); position: relative; transition: transform 0.4s ease, border-color 0.4s ease; display: flex; flex-direction: column; }
+        .card:hover { transform: translateY(-10px); border-color: var(--primary); box-shadow: 0 20px 40px rgba(0,255,174,0.1); }
+        
+        .image-container { position: relative; width: 100%; height: 320px; overflow: hidden; cursor: pointer; }
+        .main-img { width: 100%; height: 100%; object-fit: cover; transition: 0.5s; }
+        .card:hover .main-img { scale: 1.05; }
+        
+        .thumbnails { display: flex; gap: 8px; padding: 12px; background: rgba(0,0,0,0.5); overflow-x: auto; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; cursor: pointer; opacity: 0.4; border: 2px solid transparent; transition: 0.3s; }
+        .thumb.active { opacity: 1; border-color: var(--primary); }
+        
+        .info { padding: 25px; text-align: center; flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .info h3 { margin: 0; font-size: 1.2rem; font-weight: 600; }
+        .precio { color: var(--primary); font-size: 1.8rem; font-weight: 700; margin: 15px 0; }
+        
+        .badge-agotado { position: absolute; top: 20px; left: 20px; background: #ff4444; color: white; padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 11px; z-index: 10; letter-spacing: 1px; box-shadow: 0 5px 15px rgba(255,68,68,0.3); }
+        
+        button { width: 100%; padding: 16px; border: none; background: var(--primary); color: #000; font-weight: 700; font-size: 0.9rem; border-radius: 14px; cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
+        button:hover:not(:disabled) { background: #fff; transform: scale(1.02); }
+        button:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+        #loader { text-align: center; padding: 100px 20px; font-size: 1.2rem; color: #555; }
+        .spinner { width: 40px; height: 40px; border: 3px solid rgba(0,255,174,0.1); border-top: 3px solid var(--primary); border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Modal Zoom */
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
+        
+        .modal-carousel { display: flex; width: 100%; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; }
+        .modal-carousel::-webkit-scrollbar { display: none; }
+        .modal-slide { min-width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; scroll-snap-align: center; }
+        .modal-slide img { max-width: 95%; max-height: 85vh; border-radius: 12px; box-shadow: 0 0 50px rgba(0,0,0,0.5); object-fit: contain; }
+        
+        .modal-close { position: absolute; top: 10px; right: 10px; width: 60px; height: 60px; background: transparent; color: white; border: none; font-size: 32px; cursor: pointer; z-index: 2100; display: flex; align-items: center; justify-content: center; opacity: 0.6; transition: 0.3s; margin: 0; }
+        .modal-close:hover { opacity: 1; transform: scale(1.1); }
+        .modal-hint { position: absolute; bottom: 30px; color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; pointer-events: none; }
+
+        /* Botón de Inicio Flotante (Estilo Fantasma) */
+        #btn-home-float { position: fixed; bottom: 25px; right: 25px; width: 50px; height: 50px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 50%; color: white; cursor: pointer; z-index: 1500; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); opacity: 0; transform: translateY(20px); transition: 0.4s; pointer-events: none; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        #btn-home-float.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+        #btn-home-float.flash { background: var(--primary); color: #000; border-color: var(--primary); transform: scale(1.1); }
+        #btn-home-float svg { width: 22px; height: 22px; fill: currentColor; }
+    </style>
+</head>
+<body>
+    <div id="modal">
+        <button class="modal-close" onclick="cerrarZoom()">✕</button>
+        <div id="modal-content" class="modal-carousel"></div>
+        <div class="modal-hint">← Desliza para ver más →</div>
+    </div>
+    
+    <header>
+        <img src="logo.png" alt="Virtual Store" onclick="volverAlInicio()" onerror="this.style.display='none'">
+        
+        <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="search-input" placeholder="Buscar por nombre o categoría..." oninput="filtrarProductos()">
+            <span id="btn-clear-search" class="clear-search" onclick="limpiarBusqueda()">×</span>
+        </div>
+        <div class="filtros-container">
+            <button class="btn-filtro activo" onclick="filtrarCategoria(this, '')">Todos</button>
+            <button class="btn-filtro" onclick="filtrarCategoria(this, 'Tecnología')">📱 Tecnología</button>
+            <button class="btn-filtro" onclick="filtrarCategoria(this, 'Electrodomésticos')">🏠 Electrod.</button>
+            <button class="btn-filtro" onclick="filtrarCategoria(this, 'Herramientas')">🔧 Herramientas</button>
+            <button class="btn-filtro" onclick="filtrarCategoria(this, 'Deportes')">⚽ Deportes</button>
+            <button class="btn-filtro" onclick="filtrarCategoria(this, 'Indumentaria')">👕 Indumentaria</button>
+            <button class="btn-filtro" onclick="filtrarCategoria(this, 'Entretenimiento')">🎮 Entrete.</button>
+            <button class="btn-filtro" onclick="filtrarCategoria(this, 'Cuidado Personal')">💆 Cuidado P.</button>
+            <button class="btn-filtro" onclick="filtrarCategoria(this, 'Otros')">📦 Otros</button>
+        </div>
+    </header>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        Actualizando catálogo...
+    </div>
+
+    <section id="lista" class="productos"></section>
+    
+    <button id="btn-home-float" onclick="volverAlInicio()" title="Volver al inicio">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+    </button>
+
+<script>
+    // URL DE TU GOOGLE APPS SCRIPT
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzgIQ63nrbptAKmTXmyfvF1LCemVKVIq4Rrw3K3RWNXIua5tnEu1EtDkCm9ysj4ok4/exec"; 
+
+    let todosLosProductos = [];
+    let categoriaActiva = "";
+
+    async function cargarTienda() {
+        try {
+            const res = await fetch(GAS_URL, { redirect: "follow" });
+            const data = await res.json();
+            
+            if (!data.productos || data.productos.length === 0) {
+                document.getElementById("loader").innerHTML = "No hay productos disponibles actualmente.";
+                return;
+            }
+
+            todosLosProductos = data.productos;
+            mostrarProductos(todosLosProductos);
+            document.getElementById("loader").style.display = "none";
+        } catch (e) {
+            console.error(e);
+            document.getElementById("loader").innerHTML = "Error al conectar con la tienda.";
+        }
+    }
+
+    function volverAlInicio() {
+        const btn = document.getElementById("btn-home-float");
+        
+        // Efecto de destello (Flash)
+        if (btn) {
+            btn.classList.add("flash");
+            setTimeout(() => btn.classList.remove("flash"), 500);
+        }
+
+        // Subir suavemente al principio
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        
+        // Limpiar buscador y resetear TODA la lista (esto pone las fotos principales de nuevo)
+        const searchInput = document.getElementById("search-input");
+        if (searchInput) searchInput.value = "";
+        mostrarProductos(todosLosProductos);
+    }
+
+    // Control de visibilidad del botón flotante
+    window.onscroll = function() {
+        const btn = document.getElementById("btn-home-float");
+        if (window.scrollY > 400) {
+            btn.classList.add("visible");
+        } else {
+            btn.classList.remove("visible");
+        }
+    };
+
+    function mostrarProductos(listaParaMostrar) {
+        const lista = document.getElementById("lista");
+        lista.innerHTML = "";
+
+        if (listaParaMostrar.length === 0) {
+            lista.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #555; padding: 100px 20px;">No se encontraron productos que coincidan con tu búsqueda.</div>';
+            return;
+        }
+
+        listaParaMostrar.forEach((p, idx) => {
+            const isAgotado = p.Stock === "Agotado";
+            const fotos = p.ImagenURL ? p.ImagenURL.split(",") : ["https://via.placeholder.com/300"];
+            const cardId = `p-${idx}`;
+
+            let cardHtml = `
+                <div class="card" id="${cardId}" style="${isAgotado ? 'filter: grayscale(0.7);' : ''}">
+                    ${isAgotado ? '<div class="badge-agotado">SIN STOCK</div>' : ''}
+                    
+                    <div class="image-container" onclick="abrirZoom('${p.ImagenURL}', 0)">
+                        <img src="${fotos[0]}" class="main-img" id="main-${cardId}">
+                    </div>
+
+                    ${fotos.length > 1 ? `
+                        <div class="thumbnails">
+                            ${fotos.map((f, i) => `
+                                <img src="${f}" class="thumb ${i === 0 ? 'active' : ''}" 
+                                     onclick="cambiarImagen('${cardId}', '${p.ImagenURL}', ${i}, this)">
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
+                    <div class="info">
+                        <div>
+                            <h3>${p.Nombre}</h3>
+                            <p style="font-size:0.8rem; color:#888; margin-top:5px;">Categoría: ${p.Categoria || 'General'}</p>
+                        </div>
+                        <div>
+                            <div class="precio">$${p.Precio}</div>
+                            <button ${isAgotado ? 'disabled' : ''} onclick="pedirProducto('${p.Nombre}', '${p.Precio}')">
+                                ${isAgotado ? 'Producto Agotado' : 'Pedir por WhatsApp'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lista.innerHTML += cardHtml;
+        });
+    }
+
+    function filtrarProductos() {
+        const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        const input = document.getElementById("search-input");
+        const term = normalize(input.value.trim());
+        const btnClear = document.getElementById("btn-clear-search");
+
+        // Mostrar/Ocultar cruz de limpieza
+        if (input.value.length > 0) {
+            btnClear.style.display = "block";
+        } else {
+            btnClear.style.display = "none";
+        }
+
+        const filtrados = todosLosProductos.filter(p => {
+            const nombre = normalize(p.Nombre || "");
+            const catProducto = normalize(p.Categoria || "");
+            const matchTexto = term === "" || nombre.includes(term) || catProducto.includes(term);
+            const matchCategoria = categoriaActiva === "" || (p.Categoria || "") === categoriaActiva;
+            return matchTexto && matchCategoria;
+        });
+        mostrarProductos(filtrados);
+    }
+
+    function filtrarCategoria(btn, categoria) {
+        categoriaActiva = categoria;
+        document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('activo'));
+        btn.classList.add('activo');
+        filtrarProductos();
+    }
+
+    function limpiarBusqueda() {
+        const input = document.getElementById("search-input");
+        input.value = "";
+        filtrarProductos();
+        input.focus();
+    }
+
+    function cambiarImagen(cardId, urlsString, idx, el) {
+        const urls = urlsString.split(',');
+        const url = urls[idx];
+        document.getElementById(`main-${cardId}`).src = url;
+        const thumbs = document.querySelectorAll(`#${cardId} .thumb`);
+        thumbs.forEach(t => t.classList.remove('active'));
+        el.classList.add('active');
+        // Actualizar zoom para la nueva imagen elegida (pero pasamos todas las urls)
+        el.closest('.card').querySelector('.image-container').onclick = () => abrirZoom(urlsString, idx);
+    }
+
+    function abrirZoom(urlsString, startIndex) {
+        const urls = urlsString.split(',');
+        const modal = document.getElementById('modal');
+        const container = document.getElementById('modal-content');
+        
+        container.innerHTML = urls.map(url => `
+            <div class="modal-slide">
+                <img src="${url}" onclick="event.stopPropagation()">
+            </div>
+        `).join('');
+
+        modal.style.display = 'flex';
+        
+        // Hacer scroll a la imagen seleccionada inicialmente
+        setTimeout(() => {
+            container.scrollLeft = container.offsetWidth * startIndex;
+        }, 10);
+    }
+
+    function cerrarZoom() {
+        document.getElementById('modal').style.display = 'none';
+        document.getElementById('modal-content').innerHTML = '';
+    }
+
+    function pedirProducto(nombre, precio) {
+        const telefono = "5493624744142";
+        const msg = encodeURIComponent(`¡Hola! Me interesa este producto:\n\n*${nombre}*\nPrecio: *$${precio}*\n\n¿Tienen stock disponible?`);
+        window.open(`https://wa.me/${telefono}?text=${msg}`, '_blank');
+    }
+
+    cargarTienda();
+</script>
+</body>
+</html>
